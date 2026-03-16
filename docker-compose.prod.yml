@@ -15,23 +15,26 @@ services:
       timeout: 5s
       retries: 5
 
-odoo:
-  build:
-    context: .
-    dockerfile: docker/Dockerfile
-  image: odoo-custom:19.0.0-prod
-  restart: unless-stopped
-  depends_on:
-    db:
-      condition: service_healthy
-  env_file:
-    - .env.prod
-  ports:
-    - "8069:8069"
-  volumes:
-    - ./addons:/mnt/extra-addons
-    - ./config:/etc/odoo
-    - odoo_data:/var/lib/odoo
+  odoo:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: odoo-custom:19.0.0-prod
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    ports:
+      - "8069:8069"
+    volumes:
+      - ./addons:/mnt/extra-addons
+      - ./config:/etc/odoo
+      - odoo_data:/var/lib/odoo
+    networks:
+      - internal
+
 volumes:
   postgres_data:
   odoo_data:

@@ -9,13 +9,13 @@ echo "==== START BOOTSTRAP ===="
 export DEBIAN_FRONTEND=noninteractive
 
 echo "Waiting for cloud-init..."
-sleep 30
+cloud-init status --wait
 
 echo "Updating system..."
 apt-get update -y
 apt-get install -y ca-certificates curl gnupg git
 
-echo "Installing Docker (official repo)..."
+echo "Installing Docker..."
 
 install -m 0755 -d /etc/apt/keyrings
 
@@ -45,7 +45,15 @@ mkdir -p /opt/odoo
 cd /opt/odoo
 
 echo "Cloning repository..."
-git clone https://github.com/PvZeuS/Odoo-docker.git .
+
+if [ ! -d ".git" ]; then
+  git clone https://github.com/PvZeuS/Odoo-docker.git .
+else
+  git pull
+fi
+
+echo "Validating docker compose..."
+docker compose -f docker-compose.prod.yml config
 
 echo "Starting containers..."
 docker compose -f docker-compose.prod.yml up -d --build
