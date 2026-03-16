@@ -1,0 +1,273 @@
+#  Odoo 19 en Docker — Guía de Instalación Local
+
+Guía paso a paso para levantar Odoo 19 en tu máquina local usando Docker.  
+Basada en una infraestructura real y probada. Sin errores, sin atajos.
+
+---
+
+## Requisitos Previos
+
+Antes de empezar, instala estas herramientas:
+
+| Herramienta | Versión mínima | Descarga |
+|---|---|---|
+| Docker Desktop | 4.x | https://www.docker.com/products/docker-desktop |
+| Git (opcional) | cualquiera | https://git-scm.com |
+
+> En Windows, asegúrate de que Docker Desktop esté **corriendo** antes de continuar (ícono de ballena en la barra de tareas).
+
+---
+
+## Estructura del Proyecto
+
+Crea esta estructura de carpetas en tu computadora:
+
+```
+odoo-local/
+├── docker/
+│   └── docker-compose.yml
+├── config/
+│   └── odoo.conf
+└── addons/              ← tus módulos personalizados van aquí (puede quedar vacío)
+```
+
+### Cómo crearla desde la terminal
+
+**Windows (CMD o PowerShell):**
+```cmd
+mkdir odoo-local
+cd odoo-local
+mkdir docker config addons
+```
+
+**Mac / Linux:**
+```bash
+mkdir -p odoo-local/{docker,config,addons}
+cd odoo-local
+```
+
+---
+
+## Paso 1 — Crear el archivo `docker-compose.yml`
+
+Dentro de la carpeta `docker/`, crea el archivo `docker-compose.yml` con este contenido:
+
+```yaml
+services:
+  db:
+    image: postgres:15
+    container_name: odoo_db
+    restart: always
+    environment:
+      - POSTGRES_DB=odoo
+      - POSTGRES_USER=odoo
+      - POSTGRES_PASSWORD=odoo
+    volumes:
+      - odoo_db_data:/var/lib/postgresql/data
+
+  odoo:
+    image: odoo:19
+    container_name: odoo_app
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "8069:8069"
+    volumes:
+      - odoo_data:/var/lib/odoo
+      - ../config/odoo.conf:/etc/odoo/odoo.conf
+      - ../addons:/mnt/extra-addons
+
+volumes:
+  odoo_data:
+  odoo_db_data:
+```
+
+---
+
+## Paso 2 — Crear el archivo `odoo.conf`
+
+Dentro de la carpeta `config/`, crea el archivo `odoo.conf` con este contenido:
+
+```ini
+[options]
+db_host = db
+db_port = 5432
+db_user = odoo
+db_password = odoo
+db_name = odoo
+
+addons_path = /usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons
+```
+
+---
+
+##  Paso 3 — Levantar los contenedores
+
+Abre una terminal **dentro de la carpeta `docker/`** y ejecuta:
+
+```bash
+docker compose up -d
+```
+
+Docker descargará las imágenes automáticamente (puede tardar unos minutos la primera vez).
+
+Verifica que estén corriendo:
+
+```bash
+docker compose ps
+```
+
+Deberías ver algo así:
+
+```
+NAME         IMAGE        STATUS
+odoo_db      postgres:15  Up (healthy)
+odoo_app     odoo:19      Up
+```
+
+---
+
+##  Paso 4 — Inicializar la base de datos
+
+>  Este paso se hace **una única vez**. Si no lo haces, Odoo mostrará error 500.
+
+Ejecuta:
+
+```bash
+docker exec odoo_app odoo -d odoo -i base --stop-after-init
+```
+
+Esto instala los módulos base de Odoo. Tarda entre **3 y 8 minutos**.  
+Verás mucho texto en pantalla — es normal. Espera hasta que regrese al prompt.
+
+Luego reinicia Odoo:
+
+```bash
+docker compose restart odoo
+```
+
+---
+
+##  Paso 5 — Abrir Odoo
+
+Abre tu navegador y entra a:
+
+```
+http://localhost:8069
+```
+
+Inicia sesión con:
+
+| Campo | Valor |
+|---|---|
+| **Usuario** | `admin` |
+| **Contraseña** | `admin` |
+
+¡Listo! Odoo 19 está funcionando en tu máquina. 🎉
+
+---
+
+## Comandos del Día a Día
+
+```bash
+# Iniciar Odoo
+docker compose up -d
+
+# Detener Odoo (sin borrar datos)
+docker compose stop
+
+# Ver logs en tiempo real
+docker compose logs -f odoo
+
+# Reiniciar solo Odoo
+docker compose restart odoo
+
+# Detener y borrar TODO incluyendo datos  ← úsalo con cuidado
+docker compose down -v
+```
+
+---
+
+## Instalar Módulos Adicionales
+
+### Módulos personalizados (carpeta `addons/`)
+
+1. Copia tu módulo dentro de la carpeta `addons/`
+2. Reinicia: `docker compose restart odoo`
+3. En Odoo: **Ajustes → Activar modo desarrollador → Actualizar lista de módulos**
+4. Busca e instala tu módulo desde el menú **Aplicaciones**
+
+### Desde la terminal
+
+```bash
+docker exec odoo_app odoo -d odoo -i nombre_del_modulo --stop-after-init
+docker compose restart odoo
+```
+
+---
+
+##  Backup y Restauración
+
+### Hacer un backup
+
+```bash
+docker exec odoo_db pg_dump -U odoo odoo > backup_odoo.sql
+```
+
+### Restaurar un backup
+
+```bash
+docker exec -i odoo_db psql -U odoo -d odoo < backup_odoo.sql
+```
+
+---
+
+##  Solución de Problemas
+
+###  Error 500 al abrir `localhost:8069`
+La base de datos no está inicializada. Ejecuta el **Paso 4** de esta guía.
+
+###  "password authentication failed"
+El `odoo.conf` tiene variables sin interpretar como `${POSTGRES_USER}`.  
+Asegúrate de usar valores directos en `odoo.conf`, no variables de entorno.
+
+###  Puerto 8069 ya en uso
+Cambia el puerto en `docker-compose.yml`:
+```yaml
+ports:
+  - "8080:8069"   # accede por localhost:8080
+```
+
+###  Los módulos en `addons/` no aparecen
+Verifica que `odoo.conf` tenga exactamente esta línea:
+```ini
+addons_path = /usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons
+```
+
+###  Docker no encuentra el `odoo.conf`
+Asegúrate de ejecutar `docker compose` **desde dentro de la carpeta `docker/`**, no desde la raíz.
+
+---
+
+##  Estructura Final del Proyecto
+
+```
+odoo-local/
+├── docker/
+│   └── docker-compose.yml     ← orquesta los contenedores
+├── config/
+│   └── odoo.conf              ← configuración de Odoo
+└── addons/
+    └── mi_modulo/             ← módulos personalizados
+        ├── __init__.py
+        └── __manifest__.py
+```
+
+---
+
+##  Referencias
+
+- [Imagen oficial Odoo en Docker Hub](https://hub.docker.com/_/odoo)
+- [Documentación Odoo 19](https://www.odoo.com/documentation/19.0/)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)

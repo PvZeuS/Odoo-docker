@@ -1,0 +1,12 @@
+# En tu directorio raíz del proyecto
+echo "# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfstate*
+terraform/.terraform.lock.hcl
+
+# Variables sensibles
+*.env
+.env
+" > .gitignore
