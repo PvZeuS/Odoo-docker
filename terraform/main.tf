@@ -48,7 +48,7 @@ resource "aws_instance" "test_ec2" {
     aws_security_group.odoo_sg.id
   ]
 
-  user_data = file("user_data.sh")
+  user_data = file("${path.module}/user_data.sh")
 
   tags = {
     Name = "terraform-odoo"
