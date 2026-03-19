@@ -49,6 +49,7 @@ resource "aws_instance" "test_ec2" {
   ]
 
   user_data = file("${path.module}/user_data.sh")
+  user_data_replace_on_change = true
 
   tags = {
     Name = "terraform-odoo"

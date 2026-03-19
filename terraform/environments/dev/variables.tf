@@ -7,5 +7,5 @@ variable "key_name" {
 }
 
 variable "my_ip" {
-  description = "192.168.18.119"
+  description = "38.253.148.253"
 }
