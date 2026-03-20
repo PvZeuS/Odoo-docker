@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DEV_HOST = "18.224.94.247"
-        STAGING_HOST = "18.219.33.101"
-        PROD_HOST = "3.144.231.64"
+        DEV_HOST = "3.14.87.140"
+        STAGING_HOST = "3.19.56.180"
+        PROD_HOST = "18.191.191.42"
     }
 
     stages {
@@ -14,12 +14,12 @@ pipeline {
                 script {
                     if (env.BRANCH_NAME == 'develop') {
                         env.TARGET_HOST = DEV_HOST
-                        env.TARGET_DIR = "/opt/odoo"
+                        env.TARGET_DIR = "/opt/odoo-dev"
                         env.ENV_NAME = "DEV"
                     } 
                     else if (env.BRANCH_NAME == 'staging') {
                         env.TARGET_HOST = STAGING_HOST
-                        env.TARGET_DIR = "/opt/odoo"
+                        env.TARGET_DIR = "/opt/odoo-staging"
                         env.ENV_NAME = "STAGING"
                     } 
                     else if (env.BRANCH_NAME == 'master') {
@@ -31,7 +31,7 @@ pipeline {
                         error "Branch no soportada: ${env.BRANCH_NAME}"
                     }
 
-                    echo " ${ENV_NAME} → ${TARGET_HOST}"
+                    echo "${env.ENV_NAME} → ${env.TARGET_HOST}"
                 }
             }
         }
@@ -56,33 +56,36 @@ pipeline {
                 ]) {
 
                     sh """
-                    ssh -o StrictHostKeyChecking=no -i \$SSH_KEY \$SSH_USER@\$TARGET_HOST '
+                    ssh -o StrictHostKeyChecking=no -i \$SSH_KEY \$SSH_USER@\$TARGET_HOST "
                         set -e
 
-                        echo "DEPLOY ${ENV_NAME}"
+                        echo 'DEPLOY ${env.ENV_NAME}'
 
-                        mkdir -p ${TARGET_DIR}
-                        cd ${TARGET_DIR}
+                        mkdir -p ${env.TARGET_DIR}
+                        cd ${env.TARGET_DIR}
 
-                        if [ ! -d ".git" ]; then
-                            git clone https://github.com/PvZeuS/Odoo-docker.git .
-                        else
+                        if [ -d .git ]; then
+                            echo 'Repo existe → actualizando'
                             git fetch origin
-                            git reset --hard origin/${BRANCH_NAME}
+                            git reset --hard origin/${env.BRANCH_NAME}
+                        else
+                            echo 'Repo inválido → limpiando y clonando'
+                            rm -rf ${env.TARGET_DIR}/*
+                            git clone --depth 1 --branch ${env.BRANCH_NAME} https://github.com/PvZeuS/Odoo-docker.git .
                         fi
 
                         docker compose -f docker-compose.prod.yml down || true
                         docker compose -f docker-compose.prod.yml up -d --build
 
-                        echo "Esperando servicio..."
+                        echo 'Esperando servicio...'
                         sleep 15
 
                         curl -f http://localhost:8069 || exit 1
 
                         docker system prune -f
 
-                        echo "DEPLOY OK"
-                    '
+                        echo 'DEPLOY OK'
+                    "
                     """
                 }
             }
