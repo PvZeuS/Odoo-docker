@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DEV_HOST = "18.224.94.247""
+        DEV_HOST = "18.224.94.247"
         STAGING_HOST = "18.219.33.101"
         PROD_HOST = "3.144.231.64"
     }
