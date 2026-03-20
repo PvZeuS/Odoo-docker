@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DEV_HOST = "3.14.87.140"
-        STAGING_HOST = "3.19.56.180"
-        PROD_HOST = "18.191.191.42"
+        DEV_HOST = "18.224.94.247""
+        STAGING_HOST = "18.219.33.101"
+        PROD_HOST = "3.144.231.64"
     }
 
     stages {
@@ -14,12 +14,12 @@ pipeline {
                 script {
                     if (env.BRANCH_NAME == 'develop') {
                         env.TARGET_HOST = DEV_HOST
-                        env.TARGET_DIR = "/opt/odoo-dev"
+                        env.TARGET_DIR = "/opt/odoo"
                         env.ENV_NAME = "DEV"
                     } 
                     else if (env.BRANCH_NAME == 'staging') {
                         env.TARGET_HOST = STAGING_HOST
-                        env.TARGET_DIR = "/opt/odoo-staging"
+                        env.TARGET_DIR = "/opt/odoo"
                         env.ENV_NAME = "STAGING"
                     } 
                     else if (env.BRANCH_NAME == 'master') {
@@ -31,7 +31,7 @@ pipeline {
                         error "Branch no soportada: ${env.BRANCH_NAME}"
                     }
 
-                    echo "${ENV_NAME} → ${TARGET_HOST}"
+                    echo " ${ENV_NAME} → ${TARGET_HOST}"
                 }
             }
         }
@@ -75,7 +75,7 @@ pipeline {
                         docker compose -f docker-compose.prod.yml up -d --build
 
                         echo "Esperando servicio..."
-                        sleep 10
+                        sleep 15
 
                         curl -f http://localhost:8069 || exit 1
 
