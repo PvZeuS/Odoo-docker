@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DEV_HOST = "3.14.87.140"
-        STAGING_HOST = "3.19.56.180"
-        PROD_HOST = "18.191.191.42"
+        DEV_HOST = "18.224.94.247"
+        STAGING_HOST = "18.219.33.101"
+        PROD_HOST = "3.144.231.64"
     }
 
     stages {
