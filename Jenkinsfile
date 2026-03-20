@@ -15,25 +15,37 @@ pipeline {
                     if (env.BRANCH_NAME == 'develop') {
                         env.TARGET_HOST = DEV_HOST
                         env.TARGET_DIR = "/opt/odoo-dev"
+                        env.ENV_NAME = "DEV"
                     } 
                     else if (env.BRANCH_NAME == 'staging') {
                         env.TARGET_HOST = STAGING_HOST
                         env.TARGET_DIR = "/opt/odoo-staging"
+                        env.ENV_NAME = "STAGING"
                     } 
-                    else if (env.BRANCH_NAME == 'main') {
+                    else if (env.BRANCH_NAME == 'master') {
                         env.TARGET_HOST = PROD_HOST
                         env.TARGET_DIR = "/opt/odoo"
+                        env.ENV_NAME = "PROD"
                     } 
                     else {
                         error "Branch no soportada: ${env.BRANCH_NAME}"
                     }
 
-                    echo "Deployando a ${env.TARGET_HOST} en ${env.TARGET_DIR}"
+                    echo "🌍 ${ENV_NAME} → ${TARGET_HOST}"
                 }
             }
         }
 
-        stage('Deploy Odoo') {
+        stage('Approval PROD') {
+            when {
+                branch 'master'
+            }
+            steps {
+                input message: '¿Deploy a producción?', ok: 'Deploy'
+            }
+        }
+
+        stage('Deploy') {
             steps {
                 withCredentials([
                     sshUserPrivateKey(
@@ -43,35 +55,35 @@ pipeline {
                     )
                 ]) {
 
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SSH_USER@$TARGET_HOST << EOF
+                    sh """
+                    ssh -o StrictHostKeyChecking=no -i \$SSH_KEY \$SSH_USER@\$TARGET_HOST '
+                        set -e
 
-                    set -e
+                        echo "DEPLOY ${ENV_NAME}"
 
-                    echo " DEPLOY EN ${TARGET_DIR}"
+                        mkdir -p ${TARGET_DIR}
+                        cd ${TARGET_DIR}
 
-                    mkdir -p ${TARGET_DIR}
-                    cd ${TARGET_DIR}
+                        if [ ! -d ".git" ]; then
+                            git clone https://github.com/PvZeuS/Odoo-docker.git .
+                        else
+                            git fetch origin
+                            git reset --hard origin/${BRANCH_NAME}
+                        fi
 
-                    if [ ! -d ".git" ]; then
-                        echo "Clonando repo..."
-                        git clone https://github.com/PvZeuS/Odoo-docker.git .
-                    else
-                        echo "Actualizando repo..."
-                        git fetch origin
-                        git reset --hard origin/${BRANCH_NAME}
-                    fi
+                        docker compose -f docker-compose.prod.yml down || true
+                        docker compose -f docker-compose.prod.yml up -d --build
 
-                    echo "Docker deploy..."
-                    docker compose -f docker-compose.prod.yml down || true
-                    docker compose -f docker-compose.prod.yml up -d --build
+                        echo "⏳ Esperando servicio..."
+                        sleep 10
 
-                    docker system prune -f
+                        curl -f http://localhost:8069 || exit 1
 
-                    echo "DEPLOY FINALIZADO"
+                        docker system prune -f
 
-                    EOF
-                    '''
+                        echo "DEPLOY OK"
+                    '
+                    """
                 }
             }
         }
