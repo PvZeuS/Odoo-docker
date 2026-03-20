@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DEV_HOST = "IP_DEV"
-        STAGING_HOST = "IP_STAGING"
-        PROD_HOST = "3.142.219.110"
+        DEV_HOST = "3.14.87.140"
+        STAGING_HOST = "3.19.56.180"
+        PROD_HOST = "18.191.191.42"
     }
 
     stages {
@@ -31,7 +31,7 @@ pipeline {
                         error "Branch no soportada: ${env.BRANCH_NAME}"
                     }
 
-                    echo "🌍 ${ENV_NAME} → ${TARGET_HOST}"
+                    echo "${ENV_NAME} → ${TARGET_HOST}"
                 }
             }
         }
@@ -74,7 +74,7 @@ pipeline {
                         docker compose -f docker-compose.prod.yml down || true
                         docker compose -f docker-compose.prod.yml up -d --build
 
-                        echo "⏳ Esperando servicio..."
+                        echo "Esperando servicio..."
                         sleep 10
 
                         curl -f http://localhost:8069 || exit 1
