@@ -1,43 +1,87 @@
+version: "3.9"
+
 services:
 
   db:
     image: postgres:16
     restart: unless-stopped
+
     env_file:
       - .env.prod
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     networks:
       - internal
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   odoo:
     build:
       context: .
       dockerfile: docker/Dockerfile
+
     image: odoo-custom:19.0.0-prod
     restart: unless-stopped
+
     depends_on:
       db:
         condition: service_healthy
+
     env_file:
       - .env.prod
+
     ports:
       - "8069:8069"
+
     volumes:
       - ./addons:/mnt/extra-addons
       - ./config:/etc/odoo
       - odoo_data:/var/lib/odoo
+
     networks:
       - internal
 
+    #HEALTHCHECK REAL
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8069/web/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+    #RESTART MÁS INTELIGENTE
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# -------------------------
+# Volumes persistentes
+# -------------------------
 volumes:
   postgres_data:
   odoo_data:
 
+# -------------------------
+# Network interna
+# -------------------------
 networks:
   internal:
+ 
