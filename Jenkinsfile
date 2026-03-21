@@ -2,11 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DEV_HOST = "18.224.94.247"
-        STAGING_HOST = "18.219.33.101"
-        PROD_HOST = "3.144.231.64"
-        TARGET_DIR = "/opt/odoo"
-        REPO_URL = "https://github.com/PvZeuS/Odoo-docker.git"
+        DEV_HOST = "3.14.87.140"
+        STAGING_HOST = "3.19.56.180"
+        PROD_HOST = "18.191.191.42"
     }
 
     stages {
@@ -16,31 +14,30 @@ pipeline {
                 script {
                     if (env.BRANCH_NAME == 'develop') {
                         env.TARGET_HOST = DEV_HOST
+                        env.TARGET_DIR = "/opt/odoo-dev"
                         env.ENV_NAME = "DEV"
                     } 
                     else if (env.BRANCH_NAME == 'staging') {
                         env.TARGET_HOST = STAGING_HOST
+                        env.TARGET_DIR = "/opt/odoo-staging"
                         env.ENV_NAME = "STAGING"
                     } 
                     else if (env.BRANCH_NAME == 'master') {
                         env.TARGET_HOST = PROD_HOST
+                        env.TARGET_DIR = "/opt/odoo"
                         env.ENV_NAME = "PROD"
                     } 
                     else {
                         error "Branch no soportada: ${env.BRANCH_NAME}"
                     }
-
-                    echo "Deploy a ${env.ENV_NAME} → ${env.TARGET_HOST}"
                 }
             }
         }
 
         stage('Approval PROD') {
-            when {
-                branch 'master'
-            }
+            when { branch 'master' }
             steps {
-                input message: '¿Deploy a PRODUCCIÓN?', ok: 'Deploy'
+                input message: '¿Deploy a producción?', ok: 'Deploy'
             }
         }
 
@@ -58,56 +55,51 @@ pipeline {
                     ssh -o StrictHostKeyChecking=no -i \$SSH_KEY \$SSH_USER@\$TARGET_HOST '
                         set -e
 
-                        echo "===== DEPLOY ${env.ENV_NAME} ====="
+                        echo "===== DEPLOY ${ENV_NAME} ====="
 
-                        # 1. Preparar carpeta
-                        sudo mkdir -p ${TARGET_DIR}
-                        sudo chown -R \$USER:\$USER ${TARGET_DIR}
+                        mkdir -p ${TARGET_DIR}
                         cd ${TARGET_DIR}
 
-                        # 2. Código fuente
-                        if [ -d .git ]; then
-                            echo "Actualizando repo..."
-                            git fetch origin
-                            git reset --hard origin/${env.BRANCH_NAME}
+                        if [ ! -d ".git" ]; then
+                            git clone https://github.com/PvZeuS/Odoo-docker.git .
                         else
-                            echo "Clonando repo..."
-                            sudo rm -rf ${TARGET_DIR}/*
-                            git clone --depth 1 --branch ${env.BRANCH_NAME} ${REPO_URL} .
+                            git fetch origin
+                            git reset --hard origin/${BRANCH_NAME}
                         fi
 
-                        # 3. Verificar docker compose
-                        docker compose version
+                        echo "Checking Docker..."
+                        sudo systemctl start docker
 
-                        # 4. Deploy
-                        echo "Levantando contenedores..."
-                        docker compose -f docker-compose.prod.yml down || true
-                        docker compose -f docker-compose.prod.yml up -d --build
+                        for i in {1..10}; do
+                            if sudo docker info > /dev/null 2>&1; then
+                                break
+                            fi
+                            sleep 2
+                        done
 
-                        # 5. Esperar servicio
-                        echo "Esperando Odoo..."
-                        sleep 20
+                        echo "Stopping old containers..."
+                        sudo docker compose -f docker-compose.prod.yml down || true
 
-                        # 6. Healthcheck REAL
-                        curl -f http://localhost:8069 || (echo "Odoo no responde" && exit 1)
+                        echo "Starting new containers..."
+                        sudo docker compose -f docker-compose.prod.yml up -d --build
 
-                        # 7. Limpieza
-                        docker system prune -f
+                        echo "Waiting for Odoo..."
+                        for i in {1..20}; do
+                            if curl -f http://localhost:8069/web/login > /dev/null 2>&1; then
+                                echo "Odoo is UP"
+                                break
+                            fi
+                            sleep 5
+                        done
+
+                        echo "Cleaning..."
+                        sudo docker system prune -f
 
                         echo "===== DEPLOY OK ====="
                     '
                     """
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo "Deploy exitoso "
-        }
-        failure {
-            echo "Deploy falló "
         }
     }
 }
