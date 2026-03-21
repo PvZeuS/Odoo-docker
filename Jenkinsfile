@@ -5,6 +5,8 @@ pipeline {
         DEV_HOST = "18.224.94.247"
         STAGING_HOST = "18.219.33.101"
         PROD_HOST = "3.144.231.64"
+        TARGET_DIR = "/opt/odoo"
+        REPO_URL = "https://github.com/PvZeuS/Odoo-docker.git"
     }
 
     stages {
@@ -14,24 +16,21 @@ pipeline {
                 script {
                     if (env.BRANCH_NAME == 'develop') {
                         env.TARGET_HOST = DEV_HOST
-                        env.TARGET_DIR = "/opt/odoo-dev"
                         env.ENV_NAME = "DEV"
                     } 
                     else if (env.BRANCH_NAME == 'staging') {
                         env.TARGET_HOST = STAGING_HOST
-                        env.TARGET_DIR = "/opt/odoo-staging"
                         env.ENV_NAME = "STAGING"
                     } 
                     else if (env.BRANCH_NAME == 'master') {
                         env.TARGET_HOST = PROD_HOST
-                        env.TARGET_DIR = "/opt/odoo"
                         env.ENV_NAME = "PROD"
                     } 
                     else {
                         error "Branch no soportada: ${env.BRANCH_NAME}"
                     }
 
-                    echo "${env.ENV_NAME} → ${env.TARGET_HOST}"
+                    echo "Deploy a ${env.ENV_NAME} → ${env.TARGET_HOST}"
                 }
             }
         }
@@ -41,7 +40,7 @@ pipeline {
                 branch 'master'
             }
             steps {
-                input message: '¿Deploy a producción?', ok: 'Deploy'
+                input message: '¿Deploy a PRODUCCIÓN?', ok: 'Deploy'
             }
         }
 
@@ -56,39 +55,59 @@ pipeline {
                 ]) {
 
                     sh """
-                    ssh -o StrictHostKeyChecking=no -i \$SSH_KEY \$SSH_USER@\$TARGET_HOST "
+                    ssh -o StrictHostKeyChecking=no -i \$SSH_KEY \$SSH_USER@\$TARGET_HOST '
                         set -e
 
-                        echo 'DEPLOY ${env.ENV_NAME}'
+                        echo "===== DEPLOY ${env.ENV_NAME} ====="
 
-                        mkdir -p ${env.TARGET_DIR}
-                        cd ${env.TARGET_DIR}
+                        # 1. Preparar carpeta
+                        sudo mkdir -p ${TARGET_DIR}
+                        sudo chown -R \$USER:\$USER ${TARGET_DIR}
+                        cd ${TARGET_DIR}
 
+                        # 2. Código fuente
                         if [ -d .git ]; then
-                            echo 'Repo existe → actualizando'
+                            echo "Actualizando repo..."
                             git fetch origin
                             git reset --hard origin/${env.BRANCH_NAME}
                         else
-                            echo 'Repo inválido → limpiando y clonando'
-                            rm -rf ${env.TARGET_DIR}/*
-                            git clone --depth 1 --branch ${env.BRANCH_NAME} https://github.com/PvZeuS/Odoo-docker.git .
+                            echo "Clonando repo..."
+                            sudo rm -rf ${TARGET_DIR}/*
+                            git clone --depth 1 --branch ${env.BRANCH_NAME} ${REPO_URL} .
                         fi
 
+                        # 3. Verificar docker compose
+                        docker compose version
+
+                        # 4. Deploy
+                        echo "Levantando contenedores..."
                         docker compose -f docker-compose.prod.yml down || true
                         docker compose -f docker-compose.prod.yml up -d --build
 
-                        echo 'Esperando servicio...'
-                        sleep 15
+                        # 5. Esperar servicio
+                        echo "Esperando Odoo..."
+                        sleep 20
 
-                        curl -f http://localhost:8069 || exit 1
+                        # 6. Healthcheck REAL
+                        curl -f http://localhost:8069 || (echo "Odoo no responde" && exit 1)
 
+                        # 7. Limpieza
                         docker system prune -f
 
-                        echo 'DEPLOY OK'
-                    "
+                        echo "===== DEPLOY OK ====="
+                    '
                     """
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "Deploy exitoso "
+        }
+        failure {
+            echo "Deploy falló "
         }
     }
 }
